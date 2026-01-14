@@ -159,7 +159,7 @@ class Float8LinearConverter(QuantizationConverter):
             f"{self.config.enable_fsdp_float8_all_gather}"
         )
 
-    def post_optimizer_hook(self, opt, *args, **kwargs):
+    def post_optimizer_hook(self, opt: torch.optim.Optimizer, *args, **kwargs):
         if not self.enabled:
             return
 
@@ -172,33 +172,26 @@ class Float8LinearConverter(QuantizationConverter):
 @torch.no_grad()
 def precompute_float8_dynamic_scale_for_fsdp(opt: torch.optim.Optimizer, *args, **kwargs) -> None:
     """
-    Calculate scale dynamically for all float8 parameters.
-    This should be run after the optimizer step. It performs a single all-reduce to compute the
-    scales for all float8 weights.
-    Example usage:
-        model(input).sum().backward()
-        optim.step()
-        precompute_float8_dynamic_scale_for_fsdp(model)
+    Reworked from https://github.com/pytorch/ao/blob/v0.15.0/torchao/float8/fsdp_utils.py#L28
+    to accept an optimizer instead of a Module.
     """
     from torch.distributed._tensor import DTensor
 
     from torchao.float8.fsdp_utils import WeightWithDynamicFloat8CastTensor
     import math
 
-    weights = []
-    for param_group in opt.param_groups:
-        for param in param_group["params"]:
-            if isinstance(param, DTensor) and isinstance(param._local_tensor, WeightWithDynamicFloat8CastTensor):
-                weights.append(param)
+    weights: list[DTensor] = [
+        param
+        for param_group in opt.param_groups
+        for param in param_group["params"]
+        if isinstance(param, DTensor)
+        and isinstance(param._local_tensor, WeightWithDynamicFloat8CastTensor)
+    ]
 
-    target_dtypes = {
-        w.dtype
-        for w in weights
-    }
+    target_dtypes = {w.dtype for w in weights}
 
     if not weights:
         return
-
     (target_dtype,) = target_dtypes
 
     # inf-norm is equivalent to max(abs(w))
@@ -278,7 +271,7 @@ class Float8GroupedMMConverter(QuantizationConverter):
             "to use dynamic float8 rowwise quantization with scaled grouped GEMMs"
         )
 
-    def post_optimizer_hook(self, opt, *args, **kwargs):
+    def post_optimizer_hook(self, opt: torch.optim.Optimizer, *args, **kwargs):
         pass
 
 

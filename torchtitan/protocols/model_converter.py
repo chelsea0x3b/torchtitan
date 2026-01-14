@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 from typing import Dict, List, Protocol, Union
 
+import torch
 import torch.nn as nn
 
 from torchtitan.config import JobConfig
@@ -28,7 +29,7 @@ class ModelConverter(Protocol):
         """Inplace conversion of the model."""
         ...
 
-    def post_optimizer_hook(self, opt, *args, **kwargs):
+    def post_optimizer_hook(self, opt: torch.optim.Optimizer, *args, **kwargs):
         """Post-optimizer (optional) hook (e.g. compute weights statistics)."""
         ...
 
@@ -72,7 +73,7 @@ class ModelConvertersContainer(ModelConverter):
         if self.print_after_conversion:
             logger.info(f"Model definion after conversion:\n\n{model}\n\n")
 
-    def post_optimizer_hook(self, opt, *args, **kwargs):
+    def post_optimizer_hook(self, opt: torch.optim.Optimizer, *args, **kwargs):
         for mh in self.converters:
             mh.post_optimizer_hook(opt, *args, **kwargs)
 
