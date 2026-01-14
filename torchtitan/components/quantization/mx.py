@@ -94,7 +94,7 @@ class MXLinearConverter(QuantizationConverter):
         )
         logger.info("Swapped to MXLinear layers")
 
-    def post_optimizer_hook(self, model: nn.Module | list[nn.Module]):
+    def post_optimizer_hook(self, opt, *args, **kwargs):
         """
         MXFP8 doesn't require any post-optimizer hooks at the moment
         """
@@ -166,7 +166,7 @@ class MXGroupedMMConverter(QuantizationConverter):
             f"to use dynamic {self.recipe_name} quantization with scaled grouped GEMMs"
         )
 
-    def post_optimizer_hook(self, model: nn.Module | list[nn.Module]):
+    def post_optimizer_hook(self, opt, *args, **kwargs):
         """
         MXFP8 MoE training doesn't require any post-optimizer hooks at the moment
         """
