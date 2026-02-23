@@ -307,7 +307,9 @@ class TokenChoiceTopKRouter(nn.Module):
                     Number of tokens assigned to each expert with shape ``(num_experts,)``.
         """
         # scores shape (bs*slen, num_experts)
-        scores = self.gate(x)
+        scores = torch.mm(x, self.gate.weight.transpose(0, 1), out_dtype=torch.float32)
+        if self.gate.bias is not None:
+            scores = scores + self.gate.bias.to(scores.dtype)
 
         # By default, sigmoid or softmax is performed in float32 to avoid loss explosion
         if self.score_func == "sigmoid":
