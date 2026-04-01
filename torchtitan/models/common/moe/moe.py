@@ -500,9 +500,32 @@ class MoE(Module):
         # to "implicitly" overlap the shared expert compute with token combine communication
         out = self.shared_experts(x) if self.shared_experts is not None else None
 
-        # Unsort routed outputs
+        out_experts = self._combine_expert_outputs(
+            routed_output,
+            token_indices_experts_sorted,
+            top_scores,
+            dim,
+        )
+
+        if out is None:
+            return out_experts.reshape(bs, slen, dim)
+        return (out + out_experts).reshape(bs, slen, dim)
+
+    @torch.compile(fullgraph=True)
+    def _combine_expert_outputs(
+        self,
+        routed_output: torch.Tensor,
+        token_indices_experts_sorted: torch.Tensor,
+        top_scores: torch.Tensor,
+        dim: int,
+    ) -> torch.Tensor:
+        """Unsort expert outputs and combine with router scores.
+
+        Compiled separately (see apply_compile_sparse) because MoE.forward() cannot
+        be compiled as a whole due to the FSDP(GroupedExperts) graph break.
+        """
         routed_output_unsorted = torch.zeros(
-            (bs * slen * self.router.top_k, dim),
+            (token_indices_experts_sorted.shape[0], dim),
             dtype=routed_output.dtype,
             device=routed_output.device,
         )
@@ -510,21 +533,18 @@ class MoE(Module):
         routed_output_unsorted = routed_output_unsorted.reshape(
             -1, self.router.top_k, dim
         )
+
         if not self.score_before_experts:
-            out_experts = (
+            return (
                 torch.bmm(
                     top_scores.reshape(-1, 1, self.router.top_k),
                     routed_output_unsorted.float(),
                 )
-                .to(x.dtype)
+                .to(routed_output.dtype)
                 .squeeze(1)
             )
         else:
-            out_experts = routed_output_unsorted.sum(dim=1)
-
-        if out is None:
-            return out_experts.reshape(bs, slen, dim)
-        return (out + out_experts).reshape(bs, slen, dim)
+            return routed_output_unsorted.sum(dim=1)
 
     def init_weights(self, **kwargs) -> None:
         init_std = kwargs.get("init_std")
